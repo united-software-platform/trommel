@@ -36,12 +36,12 @@ ALLOWED_TARGETS = frozenset(
         "help",
         "trommel-tools",
         "trommel-toolchain",
+        "trommel-fmt",
+        "trommel-deps",
         "trommel-build",
         "trommel-test",
         "trommel-image",
         "trommel-image-verify",
-        "trommel-deps",
-        "trommel-fmt",
     }
 )
 

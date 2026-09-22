@@ -142,15 +142,6 @@ openspec-init: ## Развернуть инструменты SDD: openspec init
 	docker compose --profile claude run --rm -T claude \
 		openspec init --tools claude --language ru
 
-# Версии инструментов сборки на хосте. Контейнер агента не содержит ни Go, ни docker
-# намеренно — узкий канал вместо доступа к сокету, — поэтому сборка и тесты проекта
-# выполняются на хосте через раннер. Цель отвечает, чем хост располагает, до первой
-# попытки собрать.
-trommel-tools: ## Показать версии инструментов сборки Trommel на хосте
-	@printf 'go:     '; go version 2>/dev/null || echo 'не установлен'
-	@printf 'docker: '; docker --version 2>/dev/null || echo 'не установлен'
-	@printf 'make:   '; $(MAKE) --version 2>/dev/null | head -1
-
 # Тулчейн Go живёт в контейнере сборки: на хост ничего не ставится, версия фиксируется тегом
 # образа, и сборка воспроизводима на любой машине с docker. Цели вызываются на хосте — в
 # контейнере агента docker недоступен намеренно.
@@ -160,6 +151,11 @@ trommel-tools: ## Показать версии инструментов сбо�
 GO_IMAGE ?= golang:1.27.1
 GO_RUN = docker run --rm -v "$(CURDIR)":/src -w /src -u "$$(id -u):$$(id -g)" \
 	-e GOCACHE=/tmp/.gocache -e GOMODCACHE=/tmp/.gomodcache $(GO_IMAGE)
+
+trommel-tools: ## Показать версии инструментов сборки Trommel на хосте
+	@printf 'go:     '; go version 2>/dev/null || echo 'не установлен'
+	@printf 'docker: '; docker --version 2>/dev/null || echo 'не установлен'
+	@printf 'make:   '; $(MAKE) --version 2>/dev/null | head -1
 
 trommel-fmt: ## Отформатировать исходники Trommel
 	@$(GO_RUN) gofmt -w .
