@@ -1,5 +1,6 @@
 .PHONY: help init init-host init-env init-dirs init-gitignore init-ssh-key init-ssh-config \
-	openspec-init
+	openspec-init trommel-tools trommel-toolchain trommel-build trommel-test \
+	trommel-image trommel-image-verify trommel-deps trommel-fmt
 
 .DEFAULT_GOAL := help
 
@@ -140,3 +141,60 @@ openspec-init: ## Развернуть инструменты SDD: openspec init
 	mkdir -p "$$accounts/$$profile"
 	docker compose --profile claude run --rm -T claude \
 		openspec init --tools claude --language ru
+
+# Версии инструментов сборки на хосте. Контейнер агента не содержит ни Go, ни docker
+# намеренно — узкий канал вместо доступа к сокету, — поэтому сборка и тесты проекта
+# выполняются на хосте через раннер. Цель отвечает, чем хост располагает, до первой
+# попытки собрать.
+trommel-tools: ## Показать версии инструментов сборки Trommel на хосте
+	@printf 'go:     '; go version 2>/dev/null || echo 'не установлен'
+	@printf 'docker: '; docker --version 2>/dev/null || echo 'не установлен'
+	@printf 'make:   '; $(MAKE) --version 2>/dev/null | head -1
+
+# Тулчейн Go живёт в контейнере сборки: на хост ничего не ставится, версия фиксируется тегом
+# образа, и сборка воспроизводима на любой машине с docker. Цели вызываются на хосте — в
+# контейнере агента docker недоступен намеренно.
+#
+# Кеши уводятся в /tmp контейнера: процесс исполняется от пользователя хоста, и домашнего
+# каталога у него внутри образа нет.
+GO_IMAGE ?= golang:1.27.1
+GO_RUN = docker run --rm -v "$(CURDIR)":/src -w /src -u "$$(id -u):$$(id -g)" \
+	-e GOCACHE=/tmp/.gocache -e GOMODCACHE=/tmp/.gomodcache $(GO_IMAGE)
+
+trommel-fmt: ## Отформатировать исходники Trommel
+	@$(GO_RUN) gofmt -w .
+
+trommel-deps: ## Привести зависимости модуля в порядок (go mod tidy)
+	@$(GO_RUN) go mod tidy
+
+trommel-toolchain: ## Проверить тулчейн Go в контейнере сборки
+	@$(GO_RUN) go version
+
+trommel-build: ## Собрать Trommel в контейнере сборки
+	@$(GO_RUN) go build -o bin/trommel ./cmd/trommel
+
+trommel-test: ## Прогнать тесты и статические проверки Trommel в контейнере сборки
+	@$(GO_RUN) sh -c 'test -z "$$(gofmt -l .)" || { echo "не отформатировано:"; gofmt -l .; exit 1; }'
+	@$(GO_RUN) sh -c 'go vet ./... && go test ./...'
+
+# Образ Trommel. Тег по умолчанию — рабочий: выпускной тег задаёт пайплайн, а не рабочее
+# дерево, иначе версия образа зависела бы от того, кто его собрал.
+TROMMEL_IMAGE ?= trommel:dev
+
+trommel-image: ## Собрать образ Trommel
+	@docker build -t $(TROMMEL_IMAGE) --build-arg GO_IMAGE=$(GO_IMAGE) .
+
+# Проверка двух свойств образа сразу: под кем исполняется процесс [DOCK-012], кому принадлежит
+# рабочий каталог [DOCK-013] и остаётся ли смонтированный проект недоступным для записи.
+# Успех последней проверки — именно НЕудача записи: запись в проверяемый проект запрещена.
+trommel-image-verify: ## Проверить образ: пользователь, владелец каталога, монтирование только на чтение
+	@printf 'пользователь:  '; docker run --rm --entrypoint id $(TROMMEL_IMAGE) -un
+	@printf 'каталог:       '; docker run --rm --entrypoint stat $(TROMMEL_IMAGE) -c '%U:%G %n' /srv/trommel
+	@if docker run --rm -v "$(CURDIR)":/project:ro --entrypoint sh $(TROMMEL_IMAGE) \
+		-c 'touch /project/.trommel-probe' 2>/dev/null; then \
+		echo 'монтирование:  ОШИБКА — запись в проверяемый проект удалась'; \
+		rm -f .trommel-probe; \
+		exit 1; \
+	else \
+		echo 'монтирование:  только чтение, запись отклонена'; \
+	fi

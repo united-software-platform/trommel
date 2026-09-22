@@ -29,7 +29,21 @@ from urllib.parse import urlsplit
 #
 # Цели сборки образа здесь нет и быть не может: образ собирает пайплайн репозитория kit'а,
 # а проект получает его из реестра — в Makefile такой цели нет.
-ALLOWED_TARGETS = frozenset({"init", "openspec-init", "help"})
+ALLOWED_TARGETS = frozenset(
+    {
+        "init",
+        "openspec-init",
+        "help",
+        "trommel-tools",
+        "trommel-toolchain",
+        "trommel-build",
+        "trommel-test",
+        "trommel-image",
+        "trommel-image-verify",
+        "trommel-deps",
+        "trommel-fmt",
+    }
+)
 
 # Цели выполняются в корне репозитория: там лежит Makefile окружения
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]

@@ -1,0 +1,90 @@
+// Пакет intent разбирает и проверяет контракт намерения — декларацию проверяемого
+// проекта о том, какая норма в нём действует.
+//
+// Контракт проверяется целиком до того, как Trommel обратится к содержимому проекта:
+// намерение, выраженное неточно, обнаруживается отказом, а не искажённым вердиктом.
+package intent
+
+import (
+	"fmt"
+	"sort"
+	"strings"
+)
+
+// Version — версия контракта, поддерживаемая этой сборкой. Число грубое и намеренно
+// не следует правилам совместимости: совпало — работаем, не совпало — отказ.
+// Стабильность потребитель получает фиксацией образа, а не обещанием совместимости.
+const Version = 1
+
+// File — содержимое файла контрактов проекта: несколько именованных контрактов,
+// из которых вызывающая сторона выбирает один.
+type File struct {
+	Version   int                 `yaml:"version"`
+	Rules     string              `yaml:"rules"`
+	Contracts map[string]Contract `yaml:"contracts"`
+}
+
+// Contract — один контракт намерения: состав правил и их параметры.
+//
+// Состав задаётся вычитанием: в него входят все правила каталога, кроме явно
+// исключённых. Правило, не упомянутое контрактом, остаётся в составе — норма,
+// ушедшая вперёд, проявляется в прогоне сама, а не теряется молча.
+type Contract struct {
+	Name string
+
+	// Acknowledge — правила и группы, состав которых проект подтверждает явно.
+	// В обычном режиме перечень необязателен и состава не сужает; он значим
+	// только при strict.
+	Acknowledge []string `yaml:"acknowledge"`
+
+	// Exclude — исключения из состава: правило или группа с обоснованием.
+	Exclude []Exclusion `yaml:"exclude"`
+
+	// Params — параметры правил: отображение нормы на этот проект.
+	Params map[string]Params `yaml:"params"`
+
+	// Strict — режим исчерпывающего состава: каждое правило каталога обязано быть
+	// названо в acknowledge или exclude, иначе прогон не выполняется.
+	Strict bool `yaml:"strict"`
+}
+
+// Exclusion — исключение правила или группы из состава. Обоснование обязательно:
+// исключение не исчезает из вывода, а перемещается в его отдельный раздел.
+type Exclusion struct {
+	Rule   string `yaml:"rule"`
+	Reason string `yaml:"reason"`
+}
+
+// Params — параметры одного правила.
+type Params map[string]string
+
+// Names возвращает имена объявленных контрактов в алфавитном порядке.
+func (f *File) Names() []string {
+	out := make([]string, 0, len(f.Contracts))
+	for name := range f.Contracts {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// Select возвращает контракт по имени. Необъявленное имя — ошибка вызова: вызывающая
+// сторона выбирает из объявленного проектом, но не задаёт состав сама.
+func (f *File) Select(name string) (Contract, error) {
+	contract, ok := f.Contracts[name]
+	if !ok {
+		return Contract{}, fmt.Errorf(
+			"контракт %q не объявлен; объявлены: %s", name, strings.Join(f.Names(), ", "))
+	}
+	contract.Name = name
+	return contract, nil
+}
+
+// RulesDir возвращает каталог документов нормы, заданный контрактом.
+// Умолчание — rules/: каталог нормы живёт в проверяемом проекте.
+func (f *File) RulesDir() string {
+	if strings.TrimSpace(f.Rules) == "" {
+		return "rules"
+	}
+	return f.Rules
+}

@@ -4,3 +4,6 @@
 .ssh/
 .claude-accounts/
 .idea
+
+# Артефакты сборки Trommel: собираются целью trommel-build и в репозиторий не попадают.
+bin/
