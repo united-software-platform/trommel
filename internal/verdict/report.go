@@ -19,17 +19,26 @@ const (
 
 // RuleVerdict — состояние одного правила состава.
 type RuleVerdict struct {
-	Code     string    `json:"code"`
-	Status   Status    `json:"status"`
-	Detail   string    `json:"detail,omitempty"`
-	Examined int       `json:"examined,omitempty"`
-	Findings []Finding `json:"findings,omitempty"`
+	Code   string `json:"code"`
+	Status Status `json:"status"`
+	Detail string `json:"detail,omitempty"`
+	// Text — формулировка правила из документа нормы.
+	Text string `json:"text,omitempty"`
+	// Check — граница проверки: что реализация считает нарушением. У правила
+	// без реализации здесь стоит причина, объявленная контрактом намерения.
+	Check     string    `json:"check,omitempty"`
+	Examined  int       `json:"examined,omitempty"`
+	Findings  []Finding `json:"findings,omitempty"`
+	Group     string    `json:"group,omitempty"`
+	SourceDoc string    `json:"sourceDoc,omitempty"`
 }
 
 // Excluded — правило, выведенное из состава контрактом.
 type Excluded struct {
 	Code   string `json:"code"`
 	Reason string `json:"reason"`
+	Text   string `json:"text,omitempty"`
+	Group  string `json:"group,omitempty"`
 }
 
 // Report — вердикт прогона целиком.

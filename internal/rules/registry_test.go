@@ -21,6 +21,8 @@ func (з заглушка) RequiredParams() []string { return nil }
 
 func (з заглушка) Check(Context) verdict.Result { return verdict.Result{} }
 
+func (з заглушка) Describe() string { return "описание проверки" }
+
 func (з заглушка) Samples() Samples { return Samples{} }
 
 func нормаИзКодов(t *testing.T, codes ...string) *catalog.Catalog {

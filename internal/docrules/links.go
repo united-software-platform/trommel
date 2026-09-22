@@ -64,6 +64,11 @@ func (r RelativeLinks) Check(ctx rules.Context) verdict.Result {
 	})
 }
 
+// Describe описывает границу проверки.
+func (RelativeLinks) Describe() string {
+	return "Адреса со схемой, протоколо-независимые и отсчитываемые от корня; README.md исключён самим правилом"
+}
+
 // Samples предъявляет образцы самопроверки.
 func (RelativeLinks) Samples() rules.Samples {
 	return rules.Samples{

@@ -40,6 +40,11 @@ func (v VersionTable) Check(ctx rules.Context) verdict.Result {
 	})
 }
 
+// Describe описывает границу проверки.
+func (VersionTable) Describe() string {
+	return "Наличие таблицы версий документа; README.md исключён самим правилом"
+}
+
 // Samples предъявляет образцы самопроверки.
 func (VersionTable) Samples() rules.Samples {
 	return rules.Samples{
@@ -85,6 +90,11 @@ func (v VersionOrder) Check(ctx rules.Context) verdict.Result {
 		}
 		return findings
 	})
+}
+
+// Describe описывает границу проверки.
+func (VersionOrder) Describe() string {
+	return "Возрастание номеров версий сверху вниз в таблице версий"
 }
 
 // Samples предъявляет образцы самопроверки.

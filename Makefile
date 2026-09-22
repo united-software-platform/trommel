@@ -1,6 +1,6 @@
 .PHONY: help init init-host init-env init-dirs init-gitignore init-ssh-key init-ssh-config \
 	openspec-init trommel-tools trommel-toolchain trommel-build trommel-test \
-	trommel-image trommel-image-verify trommel-deps trommel-fmt
+	trommel-image trommel-image-verify trommel-deps trommel-fmt trommel-coverage
 
 .DEFAULT_GOAL := help
 
@@ -194,3 +194,10 @@ trommel-image-verify: ## Проверить образ: пользователь
 	else \
 		echo 'монтирование:  только чтение, запись отклонена'; \
 	fi
+
+# Сводка покрытия — порождаемый документ: он отвечает, чего стоит зелёный прогон.
+# Правится не руками, а этой целью; расхождение файла с выводом прогона означает,
+# что цель не вызвали после изменения нормы или реализаций.
+trommel-coverage: ## Обновить сводку покрытия COVERAGE.md
+	@./bin/trommel --contract full --exclude-dir=openspec --format markdown > COVERAGE.md
+	@echo 'обновлено: COVERAGE.md'

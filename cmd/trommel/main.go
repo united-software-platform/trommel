@@ -64,7 +64,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		project       = flags.String("project", ".", "каталог проверяемого проекта")
 		contractFile  = flags.String("contract-file", "trommel.yaml", "файл контрактов намерения")
 		contractName  = flags.String("contract", "", "имя контракта намерения")
-		format        = flags.String("format", "text", "форма вердикта: text или json")
+		format        = flags.String("format", "text", "форма вердикта: text, json или markdown")
 		commitMessage = flags.String("commit-message", "", "текст сообщения коммита")
 		path          = flags.String("path", "", "путь обращения")
 		excludeDirs   каталоги
@@ -86,8 +86,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "не указан контракт намерения: --contract <имя>\n")
 		return verdict.ExitRefused
 	}
-	if *format != "text" && *format != "json" {
-		fmt.Fprintf(stderr, "неизвестная форма вердикта %q: ожидалось text или json\n", *format)
+	switch *format {
+	case "text", "json", "markdown":
+	default:
+		fmt.Fprintf(stderr,
+			"неизвестная форма вердикта %q: ожидалось text, json или markdown\n", *format)
 		return verdict.ExitRefused
 	}
 
@@ -116,10 +119,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 // write печатает вердикт в затребованной форме.
 func write(report *verdict.Report, format string, stdout io.Writer) error {
-	if format == "json" {
+	switch format {
+	case "json":
 		return report.WriteJSON(stdout)
+	case "markdown":
+		return report.WriteMarkdown(stdout)
+	default:
+		return report.WriteText(stdout)
 	}
-	return report.WriteText(stdout)
 }
 
 // каталоги — повторяемый флаг командной строки: каждое указание добавляет каталог

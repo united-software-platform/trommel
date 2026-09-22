@@ -58,6 +58,11 @@ func (h HTML) Check(ctx rules.Context) verdict.Result {
 	})
 }
 
+// Describe описывает границу проверки.
+func (HTML) Describe() string {
+	return "Конструкции, относимые CommonMark к HTML, вне вставок и блоков кода; автоссылка нарушением не считается"
+}
+
 // Samples предъявляет образцы самопроверки.
 func (HTML) Samples() rules.Samples {
 	return rules.Samples{
@@ -107,6 +112,11 @@ func (w Wikilink) Check(ctx rules.Context) verdict.Result {
 		}
 		return findings
 	})
+}
+
+// Describe описывает границу проверки.
+func (Wikilink) Describe() string {
+	return "Ссылки формата Wikilink в двойных квадратных скобках, вне вставок и блоков кода"
 }
 
 // Samples предъявляет образцы самопроверки.
@@ -167,6 +177,11 @@ func (s SetextHeading) Check(ctx rules.Context) verdict.Result {
 		}
 		return findings
 	})
+}
+
+// Describe описывает границу проверки.
+func (SetextHeading) Describe() string {
+	return "Строка из знаков = или - под непустым текстом; тематический разделитель и разделитель таблицы исключены"
 }
 
 // Samples предъявляет образцы самопроверки.

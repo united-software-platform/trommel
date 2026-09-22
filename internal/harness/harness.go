@@ -71,6 +71,7 @@ func Run(options Options) (*verdict.Report, error) {
 	if err != nil {
 		return nil, err
 	}
+	composition.Notes = file.Notes
 
 	if err := checkSubjects(composition, registry, options); err != nil {
 		return nil, err
@@ -131,17 +132,25 @@ func report(
 		impl, ok := registry.Lookup(rule.Code)
 		if !ok {
 			out.Rules = append(out.Rules, verdict.RuleVerdict{
-				Code:   rule.Code,
-				Status: verdict.StatusNone,
+				Code:      rule.Code,
+				Status:    verdict.StatusNone,
+				Text:      rule.Text,
+				Check:     composition.Notes[rule.Code],
+				Group:     rule.Group,
+				SourceDoc: rule.Source,
 			})
 			continue
 		}
 
 		if err := rules.Verify(impl); err != nil {
 			out.Rules = append(out.Rules, verdict.RuleVerdict{
-				Code:   rule.Code,
-				Status: verdict.StatusErr,
-				Detail: err.Error(),
+				Code:      rule.Code,
+				Status:    verdict.StatusErr,
+				Detail:    err.Error(),
+				Text:      rule.Text,
+				Check:     impl.Describe(),
+				Group:     rule.Group,
+				SourceDoc: rule.Source,
 			})
 			continue
 		}
@@ -155,11 +164,15 @@ func report(
 		})
 
 		out.Rules = append(out.Rules, verdict.RuleVerdict{
-			Code:     rule.Code,
-			Status:   result.Status(),
-			Detail:   detail(result),
-			Examined: result.Examined,
-			Findings: result.Findings,
+			Code:      rule.Code,
+			Status:    result.Status(),
+			Detail:    detail(result),
+			Text:      rule.Text,
+			Check:     impl.Describe(),
+			Examined:  result.Examined,
+			Findings:  result.Findings,
+			Group:     rule.Group,
+			SourceDoc: rule.Source,
 		})
 	}
 
@@ -167,6 +180,8 @@ func report(
 		out.Excluded = append(out.Excluded, verdict.Excluded{
 			Code:   excluded.Rule.Code,
 			Reason: excluded.Reason,
+			Text:   excluded.Rule.Text,
+			Group:  excluded.Rule.Group,
 		})
 	}
 

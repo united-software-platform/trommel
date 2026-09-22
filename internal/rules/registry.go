@@ -61,6 +61,10 @@ type Implementation interface {
 	// Samples возвращает образцы самопроверки: на чём реализация обязана
 	// сработать и на чём обязана смолчать.
 	Samples() Samples
+	// Describe описывает границу проверки: что именно реализация считает
+	// нарушением. Описание попадает в сводку покрытия, поэтому читатель видит
+	// не только состояние правила, но и объём утверждения о нём.
+	Describe() string
 }
 
 // Registry — реестр реализаций: одна реализация на правило.
@@ -160,4 +164,14 @@ func (r *Registry) Subjects(codes []string) []Subject {
 		out = append(out, subject)
 	}
 	return out
+}
+
+// Describe возвращает описание проверки правила либо пустую строку, если
+// реализации нет.
+func (r *Registry) Describe(code string) string {
+	impl, ok := r.byCode[code]
+	if !ok {
+		return ""
+	}
+	return impl.Describe()
 }

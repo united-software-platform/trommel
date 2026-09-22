@@ -52,6 +52,8 @@ func (р реализация) Check(ctx rules.Context) verdict.Result {
 	return result
 }
 
+func (р реализация) Describe() string { return "описание проверки" }
+
 func (р реализация) Samples() rules.Samples {
 	if р.безОбразцов {
 		return rules.Samples{}

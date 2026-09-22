@@ -39,6 +39,11 @@ func (c CodeLanguage) Check(ctx rules.Context) verdict.Result {
 	})
 }
 
+// Describe описывает границу проверки.
+func (CodeLanguage) Describe() string {
+	return "Открывающий забор огороженного блока кода без слова языка"
+}
+
 // Samples предъявляет образцы самопроверки.
 func (CodeLanguage) Samples() rules.Samples {
 	return rules.Samples{
@@ -91,6 +96,11 @@ func (h HeadingLevels) Check(ctx rules.Context) verdict.Result {
 		}
 		return findings
 	})
+}
+
+// Describe описывает границу проверки.
+func (HeadingLevels) Describe() string {
+	return "Переход с уровня заголовка на уровень, отстоящий более чем на единицу"
 }
 
 // Samples предъявляет образцы самопроверки.
@@ -197,6 +207,11 @@ func (f FileOpening) Check(ctx rules.Context) verdict.Result {
 		}
 		return nil
 	})
+}
+
+// Describe описывает границу проверки.
+func (FileOpening) Describe() string {
+	return "Порядок трёх открывающих элементов документа: заголовок первого уровня, назначение, секция навигации"
 }
 
 // Samples предъявляет образцы самопроверки.

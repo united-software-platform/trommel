@@ -28,6 +28,7 @@ type Composition struct {
 	Rules    []catalog.Rule
 	Excluded []ExcludedRule
 	Params   map[string]Params
+	Notes    map[string]string
 }
 
 // Resolve сверяет контракт с нормой и вычисляет состав прогона.

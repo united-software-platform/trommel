@@ -42,6 +42,7 @@ ALLOWED_TARGETS = frozenset(
         "trommel-test",
         "trommel-image",
         "trommel-image-verify",
+        "trommel-coverage",
     }
 )
 

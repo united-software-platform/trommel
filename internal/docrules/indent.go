@@ -62,6 +62,11 @@ func (i IndentedCode) Check(ctx rules.Context) verdict.Result {
 	})
 }
 
+// Describe описывает границу проверки.
+func (IndentedCode) Describe() string {
+	return "Блок с отступом в четыре пробела и более после пустой строки вне списка"
+}
+
 // Samples предъявляет образцы самопроверки.
 func (IndentedCode) Samples() rules.Samples {
 	return rules.Samples{
