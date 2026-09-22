@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/united-software-platform/trommel/internal/docrules"
 	"github.com/united-software-platform/trommel/internal/harness"
@@ -66,7 +67,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 		format        = flags.String("format", "text", "форма вердикта: text или json")
 		commitMessage = flags.String("commit-message", "", "текст сообщения коммита")
 		path          = flags.String("path", "", "путь обращения")
+		excludeDirs   каталоги
 	)
+
+	flags.Var(&excludeDirs, "exclude-dir",
+		"каталог, не подлежащий обходу; можно указать несколько раз")
 
 	if err := flags.Parse(args); err != nil {
 		return verdict.ExitRefused
@@ -94,6 +99,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		Registry:      registry(),
 		CommitMessage: *commitMessage,
 		Path:          *path,
+		ExcludeDirs:   excludeDirs,
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "прогон не выполнялся: %v\n", err)
@@ -114,4 +120,21 @@ func write(report *verdict.Report, format string, stdout io.Writer) error {
 		return report.WriteJSON(stdout)
 	}
 	return report.WriteText(stdout)
+}
+
+// каталоги — повторяемый флаг командной строки: каждое указание добавляет каталог
+// к исключаемым, а не заменяет прежние.
+type каталоги []string
+
+// String даёт представление значения флага.
+func (к *каталоги) String() string { return strings.Join(*к, ", ") }
+
+// Set добавляет каталог к исключаемым.
+func (к *каталоги) Set(value string) error {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return fmt.Errorf("пустое имя каталога")
+	}
+	*к = append(*к, value)
+	return nil
 }

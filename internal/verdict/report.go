@@ -40,6 +40,10 @@ type Report struct {
 	Fingerprint string        `json:"fingerprint"` // отпечаток нормы
 	Rules       []RuleVerdict `json:"rules"`
 	Excluded    []Excluded    `json:"excluded,omitempty"`
+	// ExcludeDirs — каталоги, выведенные из обхода вызывающей стороной. Сужение
+	// области печатается наравне с вердиктом: иначе прогон по части проекта
+	// читался бы как прогон по всему проекту.
+	ExcludeDirs []string `json:"excludeDirs,omitempty"`
 }
 
 // Counts — сводка по состояниям правил.
@@ -84,8 +88,12 @@ func (r *Report) ExitCode() int {
 func (r *Report) WriteText(out io.Writer) error {
 	fmt.Fprintf(out, "trommel %s\n", r.Trommel)
 	fmt.Fprintf(out, "контракт: %s\n", r.Contract)
-	fmt.Fprintf(out, "норма:    %s, правил %d, отпечаток %s\n\n",
+	fmt.Fprintf(out, "норма:    %s, правил %d, отпечаток %s\n",
 		r.RulesSource, len(r.Rules)+len(r.Excluded), short(r.Fingerprint))
+	if len(r.ExcludeDirs) > 0 {
+		fmt.Fprintf(out, "вне обхода: %s\n", strings.Join(r.ExcludeDirs, ", "))
+	}
+	fmt.Fprintln(out)
 
 	width := 0
 	for _, rule := range r.Rules {

@@ -32,6 +32,8 @@ type Options struct {
 	// для правил, которым они нужны.
 	CommitMessage string
 	Path          string
+	// ExcludeDirs — каталоги, выведенные из обхода вызывающей стороной.
+	ExcludeDirs []string
 }
 
 // Run выполняет прогон и возвращает вердикт.
@@ -75,6 +77,7 @@ func Run(options Options) (*verdict.Report, error) {
 	}
 
 	out := report(composition, registry, options)
+	out.ExcludeDirs = options.ExcludeDirs
 	out.RulesSource = file.RulesDir()
 	out.Fingerprint = norm.Fingerprint()
 	return out, nil
@@ -148,6 +151,7 @@ func report(
 			CommitMessage: options.CommitMessage,
 			Path:          options.Path,
 			Params:        contractParams(composition, rule.Code),
+			ExcludeDirs:   options.ExcludeDirs,
 		})
 
 		out.Rules = append(out.Rules, verdict.RuleVerdict{

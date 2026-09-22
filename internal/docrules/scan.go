@@ -59,9 +59,13 @@ func walk(ctx rules.Context, check checker) verdict.Result {
 
 		// Скрытые каталоги в обход не входят: там лежит служебное содержимое —
 		// настройки среды, инструменты агента, история репозитория, — которое
-		// проекту не принадлежит и его нормой не регулируется.
+		// проекту не принадлежит и его нормой не регулируется. Прочие исключения
+		// задаёт вызывающая сторона и они названы в вердикте.
 		if entry.IsDir() {
-			if path != "." && strings.HasPrefix(entry.Name(), ".") {
+			if path == "." {
+				return nil
+			}
+			if strings.HasPrefix(entry.Name(), ".") || excluded(path, ctx.ExcludeDirs) {
 				return fs.SkipDir
 			}
 			return nil
@@ -162,4 +166,20 @@ func withoutInlineCode(text string) string {
 		}
 		rest = rest[start+ticks+closing+ticks:]
 	}
+}
+
+// excluded отвечает, выведен ли каталог из обхода вызывающей стороной.
+// Сравнение идёт и по имени каталога, и по пути от корня проекта: исключить можно
+// как каталог верхнего уровня, так и вложенный, назвав его путь.
+func excluded(dir string, excludeDirs []string) bool {
+	for _, candidate := range excludeDirs {
+		candidate = strings.Trim(strings.TrimSpace(candidate), "/")
+		if candidate == "" {
+			continue
+		}
+		if dir == candidate || strings.HasPrefix(dir, candidate+"/") {
+			return true
+		}
+	}
+	return false
 }
