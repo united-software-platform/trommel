@@ -6,12 +6,14 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 
+	"github.com/united-software-platform/trommel/internal/codefacts"
 	"github.com/united-software-platform/trommel/internal/docrules"
 	"github.com/united-software-platform/trommel/internal/harness"
 	"github.com/united-software-platform/trommel/internal/rules"
@@ -67,11 +69,23 @@ func run(args []string, stdout, stderr io.Writer) int {
 		format        = flags.String("format", "text", "форма вердикта: text, json или markdown")
 		commitMessage = flags.String("commit-message", "", "текст сообщения коммита")
 		path          = flags.String("path", "", "путь обращения")
-		excludeDirs   каталоги
+		analyzer      = flags.String("analyzer", codefacts.Executable,
+			"имя или путь внешнего анализатора кода")
+		facts = flags.Bool("facts", false,
+			"снять срез фактов о коде и напечатать его, правила не исполнять")
+		levels      каталоги
+		excludeDirs каталоги
+		scanDirs    каталоги
 	)
 
 	flags.Var(&excludeDirs, "exclude-dir",
 		"каталог, не подлежащий обходу; можно указать несколько раз")
+	flags.Var(&levels, "level",
+		"уровень съёма фактов: L1, L2, L3, L4, L5, deps; можно указать несколько раз; "+
+			"без указания снимаются все уровни")
+	flags.Var(&scanDirs, "scan",
+		"сканируемый путь карты проекта; можно указать несколько раз; "+
+			"без указания сканируется проект целиком")
 
 	if err := flags.Parse(args); err != nil {
 		return verdict.ExitRefused
@@ -80,6 +94,18 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if *showVersion {
 		fmt.Fprintf(stdout, "trommel %s\n", version)
 		return verdict.ExitOK
+	}
+
+	if *facts {
+		return collect(harness.Facts{
+			Project:         os.DirFS(*project),
+			ProjectDir:      *project,
+			Analyzer:        *analyzer,
+			AnalyzerWorkDir: os.TempDir(),
+			Levels:          levels,
+			ScanDirs:        scanDirs,
+			ExcludeDirs:     excludeDirs,
+		}, *format, stdout, stderr)
 	}
 
 	if *contractName == "" {
@@ -95,14 +121,19 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	report, err := harness.Run(harness.Options{
-		Version:       version,
-		Project:       os.DirFS(*project),
-		ContractFile:  *contractFile,
-		ContractName:  *contractName,
-		Registry:      registry(),
-		CommitMessage: *commitMessage,
-		Path:          *path,
-		ExcludeDirs:   excludeDirs,
+		Version:    version,
+		Project:    os.DirFS(*project),
+		ProjectDir: *project,
+		Analyzer:   *analyzer,
+		// Рабочий каталог анализатора — временный каталог машины, а не проверяемый
+		// проект: проект остаётся неизменным, чего бы инструмент ни захотел записать.
+		AnalyzerWorkDir: os.TempDir(),
+		ContractFile:    *contractFile,
+		ContractName:    *contractName,
+		Registry:        registry(),
+		CommitMessage:   *commitMessage,
+		Path:            *path,
+		ExcludeDirs:     excludeDirs,
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "прогон не выполнялся: %v\n", err)
@@ -115,6 +146,64 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	return report.ExitCode()
+}
+
+// collect снимает срез фактов о коде и печатает его.
+//
+// Код возврата различает то же, что и прогон: съём состоялся или не состоялся.
+// Нарушений съём не ищет, поэтому исхода «нарушения есть» у него нет.
+func collect(facts harness.Facts, format string, stdout, stderr io.Writer) int {
+	slice, err := harness.Collect(facts)
+	if err != nil {
+		fmt.Fprintf(stderr, "срез не снят: %v\n", err)
+		return verdict.ExitRefused
+	}
+
+	if format == "json" {
+		encoder := json.NewEncoder(stdout)
+		encoder.SetIndent("", "  ")
+		if err := encoder.Encode(slice); err != nil {
+			fmt.Fprintf(stderr, "срез не напечатан: %v\n", err)
+			return verdict.ExitRefused
+		}
+		return verdict.ExitOK
+	}
+
+	summary(slice, stdout)
+	return verdict.ExitOK
+}
+
+// summary печатает срез для человека: состав, объём и граница.
+func summary(slice *codefacts.Slice, out io.Writer) {
+	fmt.Fprintf(out, "анализатор: %s %s\n", slice.Analyzer.Name, slice.Analyzer.Version)
+	fmt.Fprintf(out, "язык:       %s\n", slice.Language)
+	if len(slice.Scanned) > 0 {
+		fmt.Fprintf(out, "карта:      сканируется %s\n", strings.Join(slice.Scanned, ", "))
+	}
+	if len(slice.Excluded) > 0 {
+		fmt.Fprintf(out, "вне обхода: %s\n", strings.Join(slice.Excluded, ", "))
+	}
+
+	levels := make([]string, 0, len(slice.Collected))
+	for _, level := range slice.Collected {
+		levels = append(levels, string(level))
+	}
+	fmt.Fprintf(out, "уровни:     %s\n\n", strings.Join(levels, ", "))
+
+	fmt.Fprintf(out, "модулей:      %d\n", len(slice.Modules))
+	fmt.Fprintf(out, "вызовов:      %d\n", len(slice.Calls))
+	fmt.Fprintf(out, "недостижимо:  %d\n", len(slice.Unreachable))
+	fmt.Fprintf(out, "зависимостей: %d, циклов %d\n", len(slice.Dependencies), len(slice.Cycles))
+	fmt.Fprintf(out, "функций:      %d\n", len(slice.Functions))
+
+	fmt.Fprintf(out, "\nбез фактов:   %d\n", len(slice.Unexamined))
+	for i, record := range slice.Unexamined {
+		if i >= 10 {
+			fmt.Fprintf(out, "  … ещё %d\n", len(slice.Unexamined)-i)
+			break
+		}
+		fmt.Fprintf(out, "  %s — %s\n", record.Where, record.Reason)
+	}
 }
 
 // write печатает вердикт в затребованной форме.

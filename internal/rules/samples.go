@@ -3,14 +3,23 @@ package rules
 import (
 	"fmt"
 	"testing/fstest"
+
+	"github.com/united-software-platform/trommel/internal/codefacts"
 )
 
 // Sample — образец содержимого для самопроверки реализации правила.
+//
+// Образец предъявляет тот предмет, который правило проверяет: файл — правилу
+// документов, срез фактов — правилу кода. Иначе самопроверка правила на фактах
+// исполнялась бы на пустом предмете и всегда давала бы молчание, то есть проверяла
+// бы не реализацию, а отсутствие входа.
 type Sample struct {
 	// Name — имя файла, под которым образец попадает в подставное дерево.
 	Name string
 	// Content — содержимое образца.
 	Content string
+	// Code — срез фактов о коде для правил, предметом которых служат факты.
+	Code *codefacts.Slice
 }
 
 // Samples — два набора образцов реализации правила.
@@ -57,9 +66,10 @@ func Verify(impl Implementation) error {
 	return nil
 }
 
-// sampleContext собирает подставное дерево из одного образца.
+// sampleContext собирает предмет проверки из одного образца.
 func sampleContext(sample Sample) Context {
 	return Context{
 		Tree: fstest.MapFS{sample.Name: &fstest.MapFile{Data: []byte(sample.Content)}},
+		Code: sample.Code,
 	}
 }

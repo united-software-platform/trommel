@@ -53,6 +53,39 @@ type Report struct {
 	// области печатается наравне с вердиктом: иначе прогон по части проекта
 	// читался бы как прогон по всему проекту.
 	ExcludeDirs []string `json:"excludeDirs,omitempty"`
+	// ScanDirs — сканируемые пути карты проекта. Пустой перечень означает проект
+	// целиком; непустой печатается наравне с вердиктом, иначе срез части проекта
+	// читался бы как срез проекта целиком.
+	ScanDirs []string `json:"scanDirs,omitempty"`
+	// CodeFacts — срез фактов о коде, если прогон на него опирался.
+	CodeFacts *CodeFacts `json:"codeFacts,omitempty"`
+}
+
+// CodeFacts — сведения о срезе фактов о коде в вердикте.
+//
+// Вердикт называет и инструмент с версией, и состав среза: без первого повторный
+// прогон не с чем сравнивать, без второго читатель не знает, на что опиралось
+// утверждение о правилах.
+type CodeFacts struct {
+	// Analyzer, Version — чем собран срез.
+	Analyzer string `json:"analyzer"`
+	Version  string `json:"version"`
+	// Declared — уровни, объявленные контрактом намерения.
+	Declared []string `json:"declared,omitempty"`
+	// Collected — уровни, собранные в этом прогоне. Уровень, собранный и пустой,
+	// остаётся здесь: он отличается от несобранного.
+	Collected []string `json:"collected,omitempty"`
+	// Unused — состав среза объявлен, но подготовка не выполнялась: фактов о коде
+	// не потребовало ни одно правило состава.
+	Unused bool `json:"unused,omitempty"`
+	// Unexamined — граница среза: содержимое, о котором фактов не получено.
+	Unexamined []Unexamined `json:"unexamined,omitempty"`
+}
+
+// Unexamined — единица содержимого, оставшаяся без фактов, и причина этого.
+type Unexamined struct {
+	Where  string `json:"where"`
+	Reason string `json:"reason"`
 }
 
 // Counts — сводка по состояниям правил.
@@ -99,9 +132,13 @@ func (r *Report) WriteText(out io.Writer) error {
 	fmt.Fprintf(out, "контракт: %s\n", r.Contract)
 	fmt.Fprintf(out, "норма:    %s, правил %d, отпечаток %s\n",
 		r.RulesSource, len(r.Rules)+len(r.Excluded), short(r.Fingerprint))
+	if len(r.ScanDirs) > 0 {
+		fmt.Fprintf(out, "карта: сканируется %s\n", strings.Join(r.ScanDirs, ", "))
+	}
 	if len(r.ExcludeDirs) > 0 {
 		fmt.Fprintf(out, "вне обхода: %s\n", strings.Join(r.ExcludeDirs, ", "))
 	}
+	r.writeCodeFacts(out)
 	fmt.Fprintln(out)
 
 	width := 0
@@ -131,6 +168,31 @@ func (r *Report) WriteText(out io.Writer) error {
 		counts[StatusSkip], counts[StatusNone], r.Checked(), len(r.Rules))
 
 	return nil
+}
+
+// writeCodeFacts печатает строку о срезе фактов о коде.
+//
+// Объявленный и собранный состав печатаются раздельно: расхождение между ними —
+// это то, чего в срезе нет, и прятать его в равенстве нельзя.
+func (r *Report) writeCodeFacts(out io.Writer) {
+	if r.CodeFacts == nil {
+		return
+	}
+	facts := r.CodeFacts
+
+	if facts.Unused {
+		fmt.Fprintf(out, "срез кода: объявлен (%s) и не собирался — фактов о коде "+
+			"не потребовало ни одно правило состава\n", strings.Join(facts.Declared, ", "))
+		return
+	}
+
+	fmt.Fprintf(out, "анализатор: %s %s\n", facts.Analyzer, facts.Version)
+	fmt.Fprintf(out, "срез кода: объявлено %s, собрано %s\n",
+		strings.Join(facts.Declared, ", "), strings.Join(facts.Collected, ", "))
+	if len(facts.Unexamined) > 0 {
+		fmt.Fprintf(out, "без фактов: %d единиц содержимого, первая — %s (%s)\n",
+			len(facts.Unexamined), facts.Unexamined[0].Where, facts.Unexamined[0].Reason)
+	}
 }
 
 // WriteJSON печатает вердикт для машинной обработки. Набор состояний тот же,

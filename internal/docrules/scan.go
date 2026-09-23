@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/united-software-platform/trommel/internal/rules"
+	"github.com/united-software-platform/trommel/internal/scope"
 	"github.com/united-software-platform/trommel/internal/verdict"
 )
 
@@ -169,17 +170,7 @@ func withoutInlineCode(text string) string {
 }
 
 // excluded отвечает, выведен ли каталог из обхода вызывающей стороной.
-// Сравнение идёт и по имени каталога, и по пути от корня проекта: исключить можно
-// как каталог верхнего уровня, так и вложенный, назвав его путь.
+// Определение общее для всех предметов проверки — см. scope.Excluded.
 func excluded(dir string, excludeDirs []string) bool {
-	for _, candidate := range excludeDirs {
-		candidate = strings.Trim(strings.TrimSpace(candidate), "/")
-		if candidate == "" {
-			continue
-		}
-		if dir == candidate || strings.HasPrefix(dir, candidate+"/") {
-			return true
-		}
-	}
-	return false
+	return scope.Excluded(dir, excludeDirs)
 }

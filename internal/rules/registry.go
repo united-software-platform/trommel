@@ -12,6 +12,7 @@ import (
 	"sort"
 
 	"github.com/united-software-platform/trommel/internal/catalog"
+	"github.com/united-software-platform/trommel/internal/codefacts"
 	"github.com/united-software-platform/trommel/internal/verdict"
 )
 
@@ -29,6 +30,12 @@ const (
 	SubjectCommitMessage Subject = "текст сообщения коммита"
 	// SubjectPath — путь, к которому собираются обратиться.
 	SubjectPath Subject = "путь обращения"
+	// SubjectCodeFacts — факты о коде, собранные фазой подготовки.
+	//
+	// Единственный предмет, который Trommel готовит сам, а не получает от вызывающей
+	// стороны: собрать его можно только зная состав правил, и подменить его снаружи
+	// нельзя — иначе вердикт опирался бы на факты неизвестного происхождения.
+	SubjectCodeFacts Subject = "факты о коде"
 )
 
 // Context — то, что реализация получает для проверки.
@@ -39,6 +46,10 @@ type Context struct {
 	CommitMessage string
 	// Path — путь обращения, если предмет затребован.
 	Path string
+	// Code — срез фактов о коде, если предмет затребован. Пустой указатель означает
+	// несостоявшуюся подготовку: до реализации правила прогон в этом случае
+	// не доходит.
+	Code *codefacts.Slice
 	// Params — параметры правила из контракта намерения.
 	Params map[string]string
 	// ExcludeDirs — каталоги, не подлежащие обходу. Сужение области задаёт вызывающая
@@ -65,6 +76,16 @@ type Implementation interface {
 	// нарушением. Описание попадает в сводку покрытия, поэтому читатель видит
 	// не только состояние правила, но и объём утверждения о нём.
 	Describe() string
+}
+
+// CodeLevels — необязательное дополнение реализации, которой нужны факты о коде:
+// уровни среза, без которых правило не проверяется.
+//
+// Дополнение необязательно намеренно: правила, не читающие код, ничего не обязаны
+// знать об уровнях разбора, а добавление уровня к одному правилу не меняет остальные.
+type CodeLevels interface {
+	// Levels возвращает уровни среза, требуемые реализацией.
+	Levels() []codefacts.Level
 }
 
 // Registry — реестр реализаций: одна реализация на правило.
@@ -174,4 +195,26 @@ func (r *Registry) Describe(code string) string {
 		return ""
 	}
 	return impl.Describe()
+}
+
+// CodeLevels возвращает уровни среза, требуемые реализациями перечисленных правил,
+// с указанием правила, потребовавшего уровень: отказ обязан называть не только
+// недостающий уровень, но и того, кому он понадобился.
+func (r *Registry) CodeLevels(codes []string) map[codefacts.Level][]string {
+	out := make(map[codefacts.Level][]string)
+
+	for _, code := range codes {
+		impl, ok := r.byCode[code]
+		if !ok {
+			continue
+		}
+		demanding, ok := impl.(CodeLevels)
+		if !ok {
+			continue
+		}
+		for _, level := range demanding.Levels() {
+			out[level] = append(out[level], code)
+		}
+	}
+	return out
 }

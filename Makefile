@@ -1,6 +1,7 @@
 .PHONY: help init init-host init-env init-dirs init-gitignore init-ssh-key init-ssh-config \
 	openspec-init trommel-tools trommel-toolchain trommel-build trommel-test \
-	trommel-image trommel-image-verify trommel-deps trommel-fmt trommel-coverage
+	trommel-image trommel-image-verify trommel-deps trommel-fmt trommel-coverage \
+	trommel-facts
 
 .DEFAULT_GOAL := help
 
@@ -177,15 +178,31 @@ trommel-test: ## Прогнать тесты и статические пров�
 # дерево, иначе версия образа зависела бы от того, кто его собрал.
 TROMMEL_IMAGE ?= trommel:dev
 
-trommel-image: ## Собрать образ Trommel
-	@docker build -t $(TROMMEL_IMAGE) --build-arg GO_IMAGE=$(GO_IMAGE) .
+# Внешний анализатор кода в образе: версия выпуска, имя актива и его контрольная сумма.
+# Значения живут здесь, а не в .env: их потребляет сборка образа на хосте, а не сервисы
+# compose. Сумма закрепляет содержимое актива — подмена валит сборку образа.
+TLDR_VERSION ?= v0.4.0
+TLDR_ASSET ?= tldr-cli-x86_64-unknown-linux-gnu.tar.xz
+TLDR_SHA256 ?= 1455914111af163270dce630dd6c0293805c4a482c90689bd74bd9db49fb80bb
 
-# Проверка двух свойств образа сразу: под кем исполняется процесс [DOCK-012], кому принадлежит
-# рабочий каталог [DOCK-013] и остаётся ли смонтированный проект недоступным для записи.
-# Успех последней проверки — именно НЕудача записи: запись в проверяемый проект запрещена.
-trommel-image-verify: ## Проверить образ: пользователь, владелец каталога, монтирование только на чтение
+trommel-image: ## Собрать образ Trommel
+	@docker build -t $(TROMMEL_IMAGE) \
+		--build-arg GO_IMAGE=$(GO_IMAGE) \
+		--build-arg TLDR_VERSION=$(TLDR_VERSION) \
+		--build-arg TLDR_ASSET=$(TLDR_ASSET) \
+		--build-arg TLDR_SHA256=$(TLDR_SHA256) .
+
+# Проверка свойств образа сразу: под кем исполняется процесс [DOCK-012], кому принадлежит
+# рабочий каталог [DOCK-013], запускается ли анализатор закреплённой версии и остаётся ли
+# смонтированный проект недоступным для записи. Успех последней проверки — именно НЕудача
+# записи: запись в проверяемый проект запрещена.
+trommel-image-verify: ## Проверить образ: пользователь, владелец каталога, анализатор, монтирование
 	@printf 'пользователь:  '; docker run --rm --entrypoint id $(TROMMEL_IMAGE) -un
 	@printf 'каталог:       '; docker run --rm --entrypoint stat $(TROMMEL_IMAGE) -c '%U:%G %n' /srv/trommel
+	@printf 'анализатор:    '; docker run --rm --entrypoint tldr $(TROMMEL_IMAGE) --version
+	@printf 'разбор:        '; docker run --rm -v "$(CURDIR)":/project:ro --entrypoint sh \
+		$(TROMMEL_IMAGE) -c 'tldr structure /project --format json --quiet \
+		| grep -o "\"path\":" | wc -l' | sed 's/^ *//;s/$$/ файлов разобрано/'
 	@if docker run --rm -v "$(CURDIR)":/project:ro --entrypoint sh $(TROMMEL_IMAGE) \
 		-c 'touch /project/.trommel-probe' 2>/dev/null; then \
 		echo 'монтирование:  ОШИБКА — запись в проверяемый проект удалась'; \
@@ -198,6 +215,35 @@ trommel-image-verify: ## Проверить образ: пользователь
 # Сводка покрытия — порождаемый документ: он отвечает, чего стоит зелёный прогон.
 # Правится не руками, а этой целью; расхождение файла с выводом прогона означает,
 # что цель не вызвали после изменения нормы или реализаций.
+#
+# projects/ выведен из области: туда монтируются чужие проекты для съёма фактов,
+# и их документы к норме Trommel отношения не имеют.
 trommel-coverage: ## Обновить сводку покрытия COVERAGE.md
-	@./bin/trommel --contract full --exclude-dir=openspec --format markdown > COVERAGE.md
+	@./bin/trommel --contract full --exclude-dir=openspec --exclude-dir=projects \
+		--format markdown > COVERAGE.md
 	@echo 'обновлено: COVERAGE.md'
+
+# Съём фактов о коде с проекта. Путь к проекту задаётся НА ХОСТЕ: каталог projects/ внутри
+# контейнера агента — это монтирования compose, на хосте он пуст, и съём по нему дал бы
+# пустой срез вместо отказа. Пустой каталог поэтому проверяется явно.
+#
+# Съём выполняется образом Trommel: анализатор живёт в нём, на хост не ставится. Проект
+# монтируется только на чтение — съём не имеет права править снимаемое.
+FACTS_DIR ?= facts
+FACTS_FORMAT ?= text
+facts_name = $(notdir $(abspath $(PROJECT)))
+facts_file = $(FACTS_DIR)/$(facts_name).$(if $(filter json,$(FACTS_FORMAT)),json,txt)
+
+trommel-facts: ## Снять срез фактов: PROJECT=<путь на хосте> [SCAN=lib] [LEVELS=L1,L2] [FACTS_FORMAT=json]
+	@test -n "$(PROJECT)" || { echo "Ошибка: задайте PROJECT=<путь к проекту на хосте>" >&2; exit 1; }
+	@test -d "$(PROJECT)" || { echo "Ошибка: каталога $(PROJECT) на хосте нет" >&2; exit 1; }
+	@test -n "$$(ls -A "$(PROJECT)")" || { \
+		echo "Ошибка: $(PROJECT) пуст. Путь задаётся на хосте: внутри контейнера агента" >&2; \
+		echo "каталог projects/ — это монтирование compose, на хосте он пустой." >&2; exit 1; }
+	@mkdir -p $(FACTS_DIR)
+	@docker run --rm -v "$(abspath $(PROJECT))":/project:ro $(TROMMEL_IMAGE) \
+		--facts --project /project --format $(FACTS_FORMAT) \
+		$(foreach dir,$(SCAN),--scan $(dir)) $(foreach level,$(LEVELS),--level $(level)) \
+		> $(facts_file)
+	@echo "срез: $(facts_file) ($$(wc -c < $(facts_file)) байт)"
+	@if [ "$(FACTS_FORMAT)" != json ]; then cat $(facts_file); fi

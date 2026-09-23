@@ -58,8 +58,24 @@ func (r *Report) WriteMarkdown(out io.Writer) error {
 	fmt.Fprintf(out, "| Каталог нормы | `%s` |\n", r.RulesSource)
 	fmt.Fprintf(out, "| Отпечаток нормы | `%s` |\n", short(r.Fingerprint))
 	fmt.Fprintf(out, "| Контракт | `%s` |\n", r.Contract)
+	if len(r.ScanDirs) > 0 {
+		fmt.Fprintf(out, "| Карта: сканируется | `%s` |\n", strings.Join(r.ScanDirs, "`, `"))
+	}
 	if len(r.ExcludeDirs) > 0 {
 		fmt.Fprintf(out, "| Вне обхода | `%s` |\n", strings.Join(r.ExcludeDirs, "`, `"))
+	}
+	if facts := r.CodeFacts; facts != nil {
+		if facts.Unused {
+			fmt.Fprintf(out, "| Срез кода | объявлен `%s`, не собирался |\n",
+				strings.Join(facts.Declared, "`, `"))
+		} else {
+			fmt.Fprintf(out, "| Анализатор кода | `%s %s` |\n", facts.Analyzer, facts.Version)
+			fmt.Fprintf(out, "| Срез кода: объявлено | `%s` |\n",
+				strings.Join(facts.Declared, "`, `"))
+			fmt.Fprintf(out, "| Срез кода: собрано | `%s` |\n",
+				strings.Join(facts.Collected, "`, `"))
+			fmt.Fprintf(out, "| Содержимого без фактов | %d |\n", len(facts.Unexamined))
+		}
 	}
 	fmt.Fprintf(out, "\n---\n\n")
 
